@@ -1,0 +1,11 @@
+# Ignora as pastas de saída de compilação em qualquer subdiretório
+**/bin/
+**/obj/
+
+# Arquivos temporários e específicos do Visual Studio (opcional)
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+.vs/
