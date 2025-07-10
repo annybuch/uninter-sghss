@@ -1,5 +1,6 @@
 ﻿using Loop.SGHSS.Data;
 using Loop.SGHSS.Domain.Entities.Leito_Entity;
+using Loop.SGHSS.Extensions.Exceptions;
 using Loop.SGHSS.Extensions.Paginacao;
 using Loop.SGHSS.Model._Enums.Instituicao;
 using Loop.SGHSS.Model._Enums.Leitos.Loop.SGHSS.Model.Enums;
@@ -33,7 +34,7 @@ namespace Loop.SGHSS.Services.Leitos
             bool jaExiste = _dbContext.Leitos.Any(item => item.NumeroLeito == model.NumeroLeito);
 
             if (jaExiste)
-                throw new Exception("Um leito com o mesmo número já foi cadastrado no sistema");
+                throw new SGHSSBadRequestException("Um leito com o mesmo número já foi cadastrado no sistema");
 
             // --== Gerando um novo Identificador.
             model.Id = Guid.NewGuid();
@@ -55,7 +56,7 @@ namespace Loop.SGHSS.Services.Leitos
             // --== Obtendo a instituição.
             var instituicao = _dbContext.Instituicoes
                 .FirstOrDefault(x => x.Id == model.InstituicaoId)
-                ?? throw new Exception("Instituição informada não encontrada.");
+                ?? throw new SGHSSBadRequestException("Instituição informada não encontrada.");
 
             // --== Buscando leitos já existentes na instituição.
             var leitosExistentes = _dbContext.Leitos
@@ -109,7 +110,7 @@ namespace Loop.SGHSS.Services.Leitos
         /// <returns></returns>
         public async Task<PagedResult<LeitosModel>> ObterLeitosPaginados(LeitoQueryFilter filter)
         {
-            var query = _dbContext.Leitos.AsQueryable();
+            var query = _dbContext.Leitos.Where(x => !x.SysIsDeleted).AsQueryable();
 
             if (filter.HasFilters)
             {
@@ -141,10 +142,8 @@ namespace Loop.SGHSS.Services.Leitos
         /// <returns></returns>
         public async Task<LeitosModel?> ObterLeitoPorId(Guid id)
         {
-            var leito = await _dbContext.Leitos.FindAsync(id);
-
-            if (leito == null)
-                return null;
+            var leito = await _dbContext.Leitos.FindAsync(id)
+                ?? throw new SGHSSBadRequestException("Leito não encontrado no sistema");
 
             return _mapper.Map<LeitosModel>(leito);
         }
@@ -154,12 +153,12 @@ namespace Loop.SGHSS.Services.Leitos
         /// </summary>
         /// <param name="model"></param>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task<LeitosModel> EditarLeitosGeral(LeitosModel model)
         {
             // --== Obtendo leito.
             Leito leito = _dbContext.Leitos.Where((item) => item.Id == model.Id)
-                .FirstOrDefault() ?? throw new Exception("Leito informado não encontrado");
+                .FirstOrDefault() ?? throw new SGHSSBadRequestException("Leito informado não encontrado");
 
             // --== Atualizando leito.
             leito.AtualizarGeral(model);
@@ -175,12 +174,12 @@ namespace Loop.SGHSS.Services.Leitos
         /// </summary>
         /// <param name="model"></param>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task<LeitoStatus> AtualizarStatusLeito(LeitoStatus model)
         {
             // --== Obtendo leito.
             Leito leito = _dbContext.Leitos.Where((item) => item.Id == model.Id)
-                .FirstOrDefault() ?? throw new Exception("Leito informado não encontrado");
+                .FirstOrDefault() ?? throw new SGHSSBadRequestException("Leito informado não encontrado");
 
             // --== Atualizando leito.
             leito.AtualizarStatus(model);
@@ -199,7 +198,7 @@ namespace Loop.SGHSS.Services.Leitos
             // --== Verificar se o leito existe e está liberado.
             var leito = await _dbContext.Leitos
                 .FirstOrDefaultAsync(item => item.Id == model.LeitoId && item.StatusLeito == statusLeitoEnum.Liberado)
-                ?? throw new Exception("Leito informado não encontrado e/ou leito não disponível para uso no momento.");
+                ?? throw new SGHSSBadRequestException("Leito informado não encontrado e/ou leito não disponível para uso no momento.");
 
             // --==  Mapear o modelo recebido.
             var leitoPaciente = _mapper.Map<LeitosPacientesModel>(model);
@@ -247,12 +246,12 @@ namespace Loop.SGHSS.Services.Leitos
         public async Task<LeitosPacientesModel> AdicionarObservacoesPacienteLeito(AddPacienteLeitoModel model)
         {
             if (string.IsNullOrWhiteSpace(model.Observacao))
-                throw new Exception("Não é possível adicionar uma observação vazia.");
+                throw new SGHSSBadRequestException("Não é possível adicionar uma observação vazia.");
 
             // --== Localizar o relacionamento paciente-leito.
             var leitoPaciente = await _dbContext.LeitosPacientes
                 .FirstOrDefaultAsync(x => x.LeitoId == model.LeitoId && x.PacienteId == model.PacienteId)
-                ?? throw new Exception("Este paciente não foi encontrado neste leito.");
+                ?? throw new SGHSSBadRequestException("Este paciente não foi encontrado neste leito.");
 
             // --== Criar nova observação.
             var novaObservacao = new LeitosPacientesObservacaoModel
@@ -284,17 +283,17 @@ namespace Loop.SGHSS.Services.Leitos
         public async Task RemoverPacienteLeito(Guid? leitoId, Guid? pacienteId)
         {
             if (leitoId == null || pacienteId == null)
-                throw new Exception("LeitoId e PacienteId são obrigatórios.");
+                throw new SGHSSBadRequestException("LeitoId e PacienteId são obrigatórios.");
 
             // --== Obter o leito.
             var leito = _dbContext.Leitos
                 .FirstOrDefault(x => x.Id == leitoId)
-                ?? throw new Exception("Leito informado não encontrado.");
+                ?? throw new SGHSSBadRequestException("Leito informado não encontrado.");
 
             // --== Buscar o relacionamento Leito-Paciente.
             var leitoPaciente = _dbContext.LeitosPacientes
                 .FirstOrDefault(x => x.LeitoId == leitoId && x.PacienteId == pacienteId)
-                ?? throw new Exception("O paciente informado não está neste leito.");
+                ?? throw new SGHSSBadRequestException("O paciente informado não está neste leito.");
 
             // --== Registrar no histórico (log) a saída do paciente para liberar o leito.
             var log = new LeitosPacientesLogModel
@@ -330,6 +329,12 @@ namespace Loop.SGHSS.Services.Leitos
                 StatusLeito = statusLeitoEnum.Liberado
             });
         }
+
+        /// <summary>
+        /// Responsável por obter uma listagem de leitos que possuem pacientes, juntamento com as informações do mesmo.
+        /// </summary>
+        /// <param name="leitoId"></param>
+        /// <returns></returns>
         public async Task<LeitoComPacienteModel?> ObterLeitoComPacienteAtual(Guid leitoId)
         {
             // --== Buscar o leito pelo ID

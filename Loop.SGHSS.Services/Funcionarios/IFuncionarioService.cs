@@ -14,5 +14,6 @@ namespace Loop.SGHSS.Services.Funcionarios
         Task<FuncionarioModel> BuscarFuncionarioPorId(Guid id);
         Task<PagedResult<FuncionarioViewModel>> ObterFuncionariosPaginadas(FuncionarioQueryFilter filter);
         Task CadastrarFuncionario(FuncionarioModel model);
+        Task Remover(Guid funcionarioId);
     }
 }

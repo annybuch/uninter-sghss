@@ -4,6 +4,7 @@
     {
         Liberado = 0,
         EmUso = 1,
-        EmManutencao = 2
+        EmManutencao = 2,
+        Inativo = 3
     }
 }

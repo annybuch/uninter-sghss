@@ -7,6 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="JWT\**" />
+    <EmbeddedResource Remove="JWT\**" />
+    <None Remove="JWT\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Extensions.Microsoft.Http" Version="6.0.12" />
     <PackageReference Include="Mapster" Version="7.4.2-pre02" />
     <PackageReference Include="Mapster.DependencyInjection" Version="1.0.3-pre02" />
@@ -25,10 +31,6 @@
     <PackageReference Include="Pomelo.EntityFrameworkCore.MySql" Version="8.0.3" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="8.1.4" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.12.1" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="JWT\" />
   </ItemGroup>
 
 </Project>

@@ -26,12 +26,16 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+
+// --== Vincula configurações da appsettings.json à classe de configuração.
 builder.Services.Configure<LoopSGHSSConfiguration>(builder.Configuration);
 
+// --== Lê as configurações do JWT no appsettings.json.
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("A chave JWT (Jwt:Key) não está configurada.");
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("O Issuer JWT (Jwt:Issuer) não está configurado.");
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? throw new InvalidOperationException("O Audience JWT (Jwt:Audience) não está configurado.");
 
+// --== Configura autenticação com JWT.
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -48,17 +52,43 @@ builder.Services.AddAuthentication(options =>
         ValidIssuer = jwtIssuer,
         ValidAudience = jwtAudience,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
-        ClockSkew = TimeSpan.Zero
+        ClockSkew = TimeSpan.Zero 
+    };
+
+    // --== Personalização de mensagens para erros de autenticação/autorização.
+    options.Events = new JwtBearerEvents
+    {
+        OnForbidden = context =>
+        {
+            context.Response.StatusCode = 403;
+            context.Response.ContentType = "application/json";
+            var result = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                mensagem = "Você não tem permissão para executar esta ação (policy requerida)."
+            });
+            return context.Response.WriteAsync(result);
+        },
+        OnChallenge = context =>
+        {
+            context.HandleResponse();
+            context.Response.StatusCode = 401;
+            context.Response.ContentType = "application/json";
+            var result = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                mensagem = "Token inválido ou ausente. Acesso negado."
+            });
+            return context.Response.WriteAsync(result);
+        }
     };
 });
 
-
+// --== Configura autorização com base em policies
 builder.Services.AddAuthorization(options =>
 {
-
+    // --== Lista de permissões utilizadas no sistema
     var allSystemPermissions = new List<string>
     {
-        "A08", "B08", "E01", "E05", "C02", "C03", 
+        "A08", "B08", "E01", "E05", "C02", "C03",
         "C08", "A02", "A03", "A04", "A05", "A06", "A07", "A09",
         "B01", "B02", "B03", "B04", "B05", "B06", "B07", "B09", "B10",
         "C01", "C04", "C05", "C06", "C07", "C09",
@@ -70,19 +100,22 @@ builder.Services.AddAuthorization(options =>
         "USUARIO_EDITAR_PERFIL_PROPRIO"
     };
 
+    // --== Cria uma policy para cada permissão
     foreach (var permission in allSystemPermissions)
     {
         options.AddPolicy(permission, policy => policy.RequireClaim("Permission", permission));
     }
 });
 
-
+// --== Configura Swagger (documentação da API)
 builder.Services.AddSwaggerGen(c =>
 {
+    // --== Inclui comentários XML no Swagger
     var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
     c.IncludeXmlComments(xmlPath);
 
+    // --== Define informações da API
     c.SwaggerDoc("v1", new OpenApiInfo
     {
         Version = "v1",
@@ -96,6 +129,7 @@ builder.Services.AddSwaggerGen(c =>
         "MySQL, Mapster e Swagger para documentação, garantindo escalabilidade, segurança e alta performance para operações de saúde."
     });
 
+    // --== Adiciona segurança via token Bearer ao Swagger
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = @"Insira 'Bearer' [espaço] e seu token!",
@@ -105,6 +139,7 @@ builder.Services.AddSwaggerGen(c =>
         Scheme = "Bearer"
     });
 
+    // --== Requer o token em todas as operações do Swagger
     c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
@@ -123,19 +158,24 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 
+    // --== Suporte a upload de arquivos
     c.OperationFilter<FileUploadOperationFilter>();
 
+    // --== Suporte ao tipo IFormFile no Swagger
     c.MapType<IFormFile>(() => new OpenApiSchema
     {
         Type = "string",
         Format = "binary"
     });
 
+    // --== Suporte a tipos não anuláveis
     c.SupportNonNullableReferenceTypes();
 });
 
+// --== Recupera configurações personalizadas (ex: strings de conexão, etc.)
 var _config = builder.Configuration.Get<LoopSGHSSConfiguration>();
 
+// --== Configura o contexto do Entity Framework com MySQL
 builder.Services.AddDbContext<LoopSGHSSDataContext>(options =>
 {
     var connectionString = builder.Configuration.GetSection("ConnectionStrings:ConnectionMySQL").Value
@@ -144,9 +184,11 @@ builder.Services.AddDbContext<LoopSGHSSDataContext>(options =>
     options.UseMySql(connectionString, ServerVersion.AutoDetect(connectionString));
 });
 
+// --== Configura o Mapster para mapeamento automático entre modelos/DTOs
 TypeAdapterConfig.GlobalSettings.Scan(AppDomain.CurrentDomain.GetAssemblies());
 builder.Services.AddMapster();
 
+// --== Registro dos serviços da aplicação (injeção de dependência)
 builder.Services.AddScoped<IInstituicaoService, InstituicaoService>();
 builder.Services.AddScoped<IConsultaService, ConsultaService>();
 builder.Services.AddScoped<IMonitoramentoService, MonitoramentoService>();
@@ -163,11 +205,11 @@ builder.Services.AddScoped<IPermissaoService, PermissaoService>();
 builder.Services.AddScoped<IIdentidadeService, IdentidadeService>();
 builder.Services.AddScoped<IAdministradorService, AdministradorService>();
 
+// --== Suporte para chamadas HTTP externas e contexto da requisição atual
 builder.Services.AddHttpClient();
 builder.Services.AddHttpContextAccessor();
 
 var app = builder.Build();
-
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -176,8 +218,10 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
-app.UseAuthorization(); 
+app.UseAuthorization();
 app.MapControllers();
+
 app.Run();
 
+// --== Testes de integração
 public partial class Program { }

@@ -3,6 +3,7 @@ using Loop.SGHSS.Domain.Entities.Agenda_Entiity;
 using Loop.SGHSS.Domain.Entities.Consulta_Entity;
 using Loop.SGHSS.Domain.Entities.Instituicao_Entity;
 using Loop.SGHSS.Domain.Entities.ProfessionalSaude_Entity;
+using Loop.SGHSS.Extensions.Exceptions;
 using Loop.SGHSS.Extensions.Paginacao;
 using Loop.SGHSS.Model._Enums.Agenda;
 using Loop.SGHSS.Model._Enums.Consulta;
@@ -31,6 +32,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
 
 
         #region Marcar Consulta
+
         // ---------------------------------------------------------------------------------------------------------------------
         // 🔍 Buscar instituições que possuem médicos com disponibilidade na especialização, somente em consultas presenciais
         // ---------------------------------------------------------------------------------------------------------------------
@@ -39,7 +41,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
             var dataReferencia = DateTime.Now;
 
             if (tipoConsulta != TipoConsultaEnum.Presencial)
-                throw new Exception("Este fluxo é válido apenas para consultas presenciais.");
+                throw new SGHSSBadRequestException("Este fluxo é válido apenas para consultas presenciais.");
 
             var dataLimite = dataReferencia.AddMonths(2);
 
@@ -127,14 +129,14 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
         // -------------------------------------------------------------------------------------
         public async Task<ConsultaModel> MarcarConsulta(MarcarConsultaModel model)
         {
-            if (model.PacienteId == null) throw new Exception("Paciente obrigatório.");
-            if (model.ProfissionalSaudeId == null) throw new Exception("Profissional obrigatório.");
-            if (model.EspecializacaoId == null) throw new Exception("Especialização obrigatória.");
-            if (model.DataMarcada == default) throw new Exception("Data inválida.");
-            if (model.TipoConsulta == default) throw new Exception("Tipo de consulta obrigatório.");
+            if (model.PacienteId == null) throw new SGHSSBadRequestException("Paciente obrigatório.");
+            if (model.ProfissionalSaudeId == null) throw new SGHSSBadRequestException("Profissional obrigatório.");
+            if (model.EspecializacaoId == null) throw new SGHSSBadRequestException("Especialização obrigatória.");
+            if (model.DataMarcada == default) throw new SGHSSBadRequestException("Data inválida.");
+            if (model.TipoConsulta == default) throw new SGHSSBadRequestException("Tipo de consulta obrigatório.");
 
             if (model.TipoConsulta == TipoConsultaEnum.Presencial && model.InstituicaoId == null)
-                throw new Exception("Instituição obrigatória para consultas presenciais.");
+                throw new SGHSSBadRequestException("Instituição obrigatória para consultas presenciais.");
 
             var contexto = await ObterContextoDeAgendamento(
                 model.EspecializacaoId!.Value,
@@ -145,7 +147,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
 
             var profissional = contexto.Profissionais
                 .FirstOrDefault(p => p.Id == model.ProfissionalSaudeId)
-                ?? throw new Exception("Profissional não encontrado.");
+                ?? throw new SGHSSBadRequestException("Profissional não encontrado.");
 
             var horariosDisponiveis = ObterHorarios(
                 profissional, model.DataMarcada,
@@ -153,7 +155,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
                 contexto.ConsultasAgendadas, model.TipoConsulta, contexto.Instituicao);
 
             if (!horariosDisponiveis.Contains(model.DataMarcada.TimeOfDay))
-                throw new Exception("O horário não está disponível.");
+                throw new SGHSSBadRequestException("O horário não está disponível.");
 
 
             var consulta = _mapper.Map<ConsultaModel>(model);
@@ -258,11 +260,11 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
             if (tipoConsulta == TipoConsultaEnum.Presencial)
             {
                 if (instituicaoId == null)
-                    throw new Exception("Instituição obrigatória para consultas presenciais.");
+                    throw new SGHSSBadRequestException("Instituição obrigatória para consultas presenciais.");
 
                 instituicao = await _dbContext.Instituicoes
                     .FirstOrDefaultAsync(i => i.Id == instituicaoId)
-                    ?? throw new Exception("Instituição não encontrada.");
+                    ?? throw new SGHSSBadRequestException("Instituição não encontrada.");
             }
 
             // 🔍 Busca profissionais que possuem a especialização e agenda do tipo correto
@@ -278,7 +280,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
                 .ToListAsync();
 
             if (!profissionais.Any())
-                throw new Exception("Nenhum profissional disponível para este tipo de consulta.");
+                throw new SGHSSBadRequestException("Nenhum profissional disponível para este tipo de consulta.");
 
             var profissionalIds = profissionais.Select(p => p.Id).ToList();
 
@@ -330,10 +332,8 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
         /// <returns></returns>
         public async Task<ConsultaModel?> BuscarConsultaPorId(Guid id)
         {
-            var entidade = await _dbContext.Consultas.FindAsync(id);
-
-            if (entidade == null)
-                return null;
+            var entidade = await _dbContext.Consultas.FindAsync(id)
+               ?? throw new SGHSSBadRequestException("Consulta não encontrada no sistema");
 
             return _mapper.Map<ConsultaModel>(entidade);
         }
@@ -343,15 +343,15 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
         /// </summary>
         /// <param name="consultaId"></param>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task<ConsultaModel> IniciarConsulta(Guid consultaId)
         {
             var consulta = await _dbContext.Consultas
                 .FirstOrDefaultAsync(c => c.Id == consultaId)
-                ?? throw new Exception("Consulta não encontrada.");
+                ?? throw new SGHSSBadRequestException("Consulta não encontrada.");
 
             if (consulta.StatusConsulta != StatusConsultaEnum.Pendente)
-                throw new Exception("Só é possível iniciar consultas pendentes.");
+                throw new SGHSSBadRequestException("Só é possível iniciar consultas pendentes.");
 
             consulta.DataInicio = DateTime.Now;
             consulta.StatusConsulta = StatusConsultaEnum.EmAtendimento;
@@ -381,19 +381,19 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
         /// <param name="consulta"></param>
         /// <param name="nomePaciente"></param>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task<string> GerarLinkDeAcessoPaciente(Guid consultaId, Guid pacienteId)
         {
             var consulta = await _dbContext.Consultas
                 .FirstOrDefaultAsync(c => c.Id == consultaId)
-                ?? throw new Exception("Consulta não encontrada.");
+                ?? throw new SGHSSBadRequestException("Consulta não encontrada.");
 
             var paciente = await _dbContext.Pacientes
                 .FirstOrDefaultAsync(c => c.Id == pacienteId)
-                ?? throw new Exception("Paciente não encontrado.");
+                ?? throw new SGHSSBadRequestException("Paciente não encontrado.");
 
             if (consulta.TipoConsulta != TipoConsultaEnum.TeleConsulta)
-                throw new Exception("Consulta não é do tipo teleconsulta.");
+                throw new SGHSSBadRequestException("Consulta não é do tipo teleconsulta.");
 
             var nomeSala = $"consulta-{consulta.Id}";
 
@@ -408,13 +408,13 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
         /// <param name="consultaId"></param>
         /// <param name="anotacoes"></param>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task<ConsultaModel> FinalizarConsulta(Guid consultaId, string? anotacoes = null)
         {
 
             var consulta = await _dbContext.Consultas
                 .FirstOrDefaultAsync(c => c.Id == consultaId)
-                ?? throw new Exception("Consulta não encontrada.");
+                ?? throw new SGHSSBadRequestException("Consulta não encontrada.");
 
             if (consulta.TipoConsulta == TipoConsultaEnum.TeleConsulta)
             {
@@ -423,7 +423,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
             }
 
             if (consulta.StatusConsulta != StatusConsultaEnum.EmAtendimento)
-                throw new Exception("Só é possível finalizar consultas que estão em andamento.");
+                throw new SGHSSBadRequestException("Só é possível finalizar consultas que estão em andamento.");
 
             if (consulta.StatusConsulta == StatusConsultaEnum.EmAtendimento)
             {
@@ -444,16 +444,16 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
         /// <param name="consultaId"></param>
         /// <param name="receita"></param>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task AnexarReceita(Guid consultaId, byte[] receita)
         {
             var consulta = await _dbContext.Consultas
                 .FirstOrDefaultAsync(c => c.Id == consultaId)
-                ?? throw new Exception("Consulta não encontrada.");
+                ?? throw new SGHSSBadRequestException("Consulta não encontrada.");
 
             if (consulta.StatusConsulta != StatusConsultaEnum.EmAtendimento &&
                 consulta.StatusConsulta != StatusConsultaEnum.Finalizada)
-                throw new Exception("Só é possível anexar documentos em consultas em andamento ou finalizadas.");
+                throw new SGHSSBadRequestException("Só é possível anexar documentos em consultas em andamento ou finalizadas.");
 
             consulta.Receita = receita;
 
@@ -466,16 +466,16 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
         /// <param name="consultaId"></param>
         /// <param name="prescricao"></param>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task AnexarPrescricao(Guid consultaId, byte[] prescricao)
         {
             var consulta = await _dbContext.Consultas
                 .FirstOrDefaultAsync(c => c.Id == consultaId)
-                ?? throw new Exception("Consulta não encontrada.");
+                ?? throw new SGHSSBadRequestException("Consulta não encontrada.");
 
             if (consulta.StatusConsulta != StatusConsultaEnum.EmAtendimento &&
                 consulta.StatusConsulta != StatusConsultaEnum.Finalizada)
-                throw new Exception("Só é possível anexar documentos em consultas em andamento ou finalizadas.");
+                throw new SGHSSBadRequestException("Só é possível anexar documentos em consultas em andamento ou finalizadas.");
 
             consulta.Prescricao = prescricao;
 
@@ -488,16 +488,16 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
         /// <param name="consultaId"></param>
         /// <param name="prescricao"></param>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task AnexarGuiaMedico(Guid consultaId, byte[] guiaMedico)
         {
             var consulta = await _dbContext.Consultas
                 .FirstOrDefaultAsync(c => c.Id == consultaId)
-                ?? throw new Exception("Consulta não encontrada.");
+                ?? throw new SGHSSBadRequestException("Consulta não encontrada.");
 
             if (consulta.StatusConsulta != StatusConsultaEnum.EmAtendimento &&
                 consulta.StatusConsulta != StatusConsultaEnum.Finalizada)
-                throw new Exception("Só é possível anexar documentos em consultas em andamento ou finalizadas.");
+                throw new SGHSSBadRequestException("Só é possível anexar documentos em consultas em andamento ou finalizadas.");
 
             consulta.GuiaMedico = guiaMedico;
 
@@ -509,18 +509,18 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
         /// </summary>
         /// <param name="consultaId">ID da consulta a ser cancelado.</param>
         /// <returns>Dados da consulta cancelada.</returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task<ConsultaModel> CancelarConsulta(Guid consultaId)
         {
             var consulta = await _dbContext.Consultas
                 .FirstOrDefaultAsync(c => c.Id == consultaId)
-                ?? throw new Exception("Consulta não encontrada.");
+                ?? throw new SGHSSBadRequestException("Consulta não encontrada.");
 
             if (consulta.StatusConsulta == StatusConsultaEnum.Cancelada)
-                throw new Exception("A consulta já está cancelada.");
+                throw new SGHSSBadRequestException("A consulta já está cancelada.");
 
             if (consulta.StatusConsulta == StatusConsultaEnum.Finalizada)
-                throw new Exception("Não é possivel cancelar uma consulta já realizada.");
+                throw new SGHSSBadRequestException("Não é possivel cancelar uma consulta já realizada.");
 
             consulta.StatusConsulta = StatusConsultaEnum.Cancelada;
 
@@ -638,6 +638,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
 
             return pacientesComConsultas;
         }
+
         #endregion
     }
 

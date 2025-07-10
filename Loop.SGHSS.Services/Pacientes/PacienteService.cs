@@ -1,5 +1,6 @@
 ﻿using Loop.SGHSS.Data;
 using Loop.SGHSS.Domain.Entities.Patient_Entity;
+using Loop.SGHSS.Extensions.Exceptions;
 using Loop.SGHSS.Extensions.Paginacao;
 using Loop.SGHSS.Extensions.Seguranca;
 using Loop.SGHSS.Model._Enums.Consulta;
@@ -31,21 +32,21 @@ namespace Loop.SGHSS.Services.Pacientes
         /// <summary>
         /// Cadastrar um novo paciente.
         /// </summary>
-        public async Task CadastrarPaciente(PacientesModel model)
+        public async Task<PacientesModel> CadastrarPaciente(PacientesModel model)
         {
             // --== Verificar se já existe um paciente com o mesmo CPF.
             var pacienteExistente = await _dbContext.Pacientes
                 .FirstOrDefaultAsync(x => x.CPF == model.CPF);
 
             if (pacienteExistente != null)
-                throw new Exception("Paciente informado já cadastrado no sistema.");
+                throw new SGHSSBadRequestException("Paciente informado já cadastrado no sistema.");
 
             // --== Gerar novo ID.
             model.Id = Guid.NewGuid();
 
             // --== Validar e hash da senha
             if (string.IsNullOrWhiteSpace(model.PasswordHash))
-                throw new Exception("Senha é obrigatória para o paciente.");
+                throw new SGHSSBadRequestException("Senha é obrigatória para o paciente.");
 
             // Usa o PasswordHelper para gerar o hash
             model.PasswordHash = PasswordHelper.GerarHashSenha(model.PasswordHash!);
@@ -57,6 +58,8 @@ namespace Loop.SGHSS.Services.Pacientes
 
             // --== ATRIBUIR PERMISSÕES PADRÃO AO NOVO PACIENTE.
             await _permissaoService.AtribuirPemissaoPadraoPaciente(entidade.Id);
+
+            return model;
         }
 
         /// <summary>
@@ -64,7 +67,7 @@ namespace Loop.SGHSS.Services.Pacientes
         /// </summary>
         public async Task<PagedResult<PacientesViewModel>> ObterPacientesPaginados(PacienteQueryFilter filter)
         {
-            var query = _dbContext.Pacientes.AsQueryable();
+            var query = _dbContext.Pacientes.Where(x => !x.SysIsDeleted).AsQueryable();
 
             var pacientes = await query
                 .OrderBy(x => x.SysDInsert)
@@ -80,7 +83,7 @@ namespace Loop.SGHSS.Services.Pacientes
         public async Task<PacientesModel> BuscarPacientePorId(Guid id)
         {
             var entidade = await _dbContext.Pacientes.FindAsync(id)
-                ?? throw new Exception("Paciente não encontrado no sistema.");
+                ?? throw new SGHSSBadRequestException("Paciente não encontrado no sistema.");
 
             return _mapper.Map<PacientesModel>(entidade);
         }
@@ -92,7 +95,7 @@ namespace Loop.SGHSS.Services.Pacientes
         {
             var paciente = await _dbContext.Pacientes
                 .FirstOrDefaultAsync(x => x.Id == model.Id)
-                ?? throw new Exception("Paciente informado não encontrado.");
+                ?? throw new SGHSSBadRequestException("Paciente informado não encontrado.");
 
             paciente.AtualizarGeral(model);
 
@@ -108,7 +111,7 @@ namespace Loop.SGHSS.Services.Pacientes
         {
             var paciente = await _dbContext.Pacientes
                 .FirstOrDefaultAsync(x => x.Id == model.Id)
-                ?? throw new Exception("Paciente informado não encontrado.");
+                ?? throw new SGHSSBadRequestException("Paciente informado não encontrado.");
 
             paciente.AtualizarEndereco(model);
 
@@ -124,13 +127,13 @@ namespace Loop.SGHSS.Services.Pacientes
         {
             var paciente = await _dbContext.Pacientes
                 .FirstOrDefaultAsync(x => x.Id == model.Id)
-                ?? throw new Exception("Paciente informado não encontrado.");
+                ?? throw new SGHSSBadRequestException("Paciente informado não encontrado.");
 
             if (string.IsNullOrWhiteSpace(model.PasswordHash) || model.PasswordHash.Length < 6)
-                throw new Exception("A senha deve ter no mínimo 6 caracteres.");
+                throw new SGHSSBadRequestException("A senha deve ter no mínimo 6 caracteres.");
 
             if (PasswordHelper.VerificarSenha(model.PasswordHash, paciente.PasswordHash!))
-                throw new Exception("A nova senha não pode ser igual à anterior.");
+                throw new SGHSSBadRequestException("A nova senha não pode ser igual à anterior.");
 
             var novaSenhaHash = PasswordHelper.GerarHashSenha(model.PasswordHash);
 

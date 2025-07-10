@@ -1,6 +1,7 @@
 ﻿using Loop.SGHSS.Data;
 using Loop.SGHSS.Data.Entities.Suprimento_Entity;
 using Loop.SGHSS.Domain.Entities.Suprimento_Entity;
+using Loop.SGHSS.Extensions.Exceptions;
 using Loop.SGHSS.Extensions.Paginacao;
 using Loop.SGHSS.Model._QueryFilter;
 using Loop.SGHSS.Model.Suprimentos;
@@ -21,6 +22,7 @@ namespace Loop.SGHSS.Services.Suprimentos
         }
 
         #region Categorias
+
         /// <summary>
         /// Cadastrar uma nova categoria de suprimento.
         /// </summary>
@@ -33,7 +35,7 @@ namespace Loop.SGHSS.Services.Suprimentos
                 .Any(item => item.Titulo!.ToLower() == model.Titulo!.ToLower());
 
             if (jaExiste)
-                throw new Exception("Categoria informada já existe no sistema");
+                throw new SGHSSBadRequestException("Categoria informada já existe no sistema");
 
             // --== Gerando um novo Identificador.
             model.Id = Guid.NewGuid();
@@ -45,7 +47,6 @@ namespace Loop.SGHSS.Services.Suprimentos
             await _dbContext.SaveChangesAsync();
         }
 
-
         /// <summary>
         /// Listar todas as caetgorias de suprimentos paginada.
         /// </summary>
@@ -53,7 +54,7 @@ namespace Loop.SGHSS.Services.Suprimentos
         public async Task<PagedResult<CategoriaSuprimentosModel>> ObterCategoriasPaginadas(CategoriaQueryFilter filter)
         {
             // --== Iniciando a query.
-            var query = _dbContext.CategoriasSuprimentos.AsQueryable();
+            var query = _dbContext.CategoriasSuprimentos.Where(x => !x.SysIsDeleted).AsQueryable();
 
             // --== Executando a query e paginação.
             var categorias = await query
@@ -132,7 +133,7 @@ namespace Loop.SGHSS.Services.Suprimentos
         public async Task<CategoriaSuprimentosModel> BuscarCategoriaPorId(Guid id)
         {
             var entidade = await _dbContext.CategoriasSuprimentos.FindAsync(id)
-                ?? throw new Exception("Categoria não encontrada no sistema.");
+                ?? throw new SGHSSBadRequestException("Categoria não encontrada no sistema.");
 
             return _mapper.Map<CategoriaSuprimentosModel>(entidade);
         }
@@ -147,7 +148,7 @@ namespace Loop.SGHSS.Services.Suprimentos
             // --== Validando categoria.
             CategoriaSuprimento categoria = _dbContext.CategoriasSuprimentos
                 .Where((item) => item.Id == model.Id)
-                .FirstOrDefault() ?? throw new Exception("Categoria informada não encontrada");
+                .FirstOrDefault() ?? throw new SGHSSBadRequestException("Categoria informada não encontrada");
 
             // --== Atualizando entidade.
             categoria.Atualizar(model);
@@ -157,10 +158,12 @@ namespace Loop.SGHSS.Services.Suprimentos
 
             return model;
         }
+
         #endregion
 
 
         #region Suprimento
+
         /// <summary>
         /// Cadastrar um novo suprimento.
         /// </summary>
@@ -185,7 +188,7 @@ namespace Loop.SGHSS.Services.Suprimentos
         public async Task<PagedResult<SuprimentosModel>> ObterSuprimentosPaginados(SuprimentoQueryFilter filter)
         {
             // --== Iniciando a query.
-            var query = _dbContext.Suprimentos.AsQueryable();
+            var query = _dbContext.Suprimentos.Where(x => !x.SysIsDeleted).AsQueryable();
 
             // --== Aplicando filtros se houver.
             if (filter.HasFilters)
@@ -216,7 +219,7 @@ namespace Loop.SGHSS.Services.Suprimentos
         public async Task<SuprimentosModel> BuscarSuprimentoPorId(Guid id)
         {
             var entidade = await _dbContext.Suprimentos.FindAsync(id)
-                ?? throw new Exception("Suprimento não encontrado no sistema.");
+                ?? throw new SGHSSBadRequestException("Suprimento não encontrado no sistema.");
 
             return _mapper.Map<SuprimentosModel>(entidade);
         }
@@ -231,7 +234,7 @@ namespace Loop.SGHSS.Services.Suprimentos
             // --== Validando suprimento.
             Suprimento suprimento = _dbContext.Suprimentos
                 .Where((item) => item.Id == model.Id)
-                .FirstOrDefault() ?? throw new Exception("Suprimento informado não encontrado");
+                .FirstOrDefault() ?? throw new SGHSSBadRequestException("Suprimento informado não encontrado");
 
             // --== Atualizando entidade.
             suprimento.Atualizar(model);
@@ -241,6 +244,7 @@ namespace Loop.SGHSS.Services.Suprimentos
 
             return model;
         }
+
         #endregion
 
 
@@ -308,6 +312,7 @@ namespace Loop.SGHSS.Services.Suprimentos
                     Descricao = cat.Descricao,
                     Suprimentos = _dbContext.Suprimentos
                         .Where(s => s.CategoriaId == cat.Id)
+                        .Where(x => !x.SysIsDeleted)
                         .Select(s => new SuprimentoComComprasViewModel
                         {
                             Id = s.Id,
@@ -315,6 +320,7 @@ namespace Loop.SGHSS.Services.Suprimentos
                             Descricao = s.Descricao,
                             Compras = _dbContext.SuprimentosCompras
                                 .Where(c => c.SuprimentoId == s.Id)
+                                .Where(x => !x.SysIsDeleted)
                                 .Select(c => new SuprimentosCompraModel
                                 {
                                     Id = c.Id,
@@ -341,7 +347,7 @@ namespace Loop.SGHSS.Services.Suprimentos
         public async Task<SuprimentosCompraModel> BuscarCompraSuprimentoPorId(Guid id)
         {
             var entidade = await _dbContext.SuprimentosCompras.FindAsync(id)
-                ?? throw new Exception("Compra de suprimento não encontrado no sistema.");
+                ?? throw new SGHSSBadRequestException("Compra de suprimento não encontrado no sistema.");
 
             return _mapper.Map<SuprimentosCompraModel>(entidade);
         }
@@ -356,7 +362,7 @@ namespace Loop.SGHSS.Services.Suprimentos
             // --== Validando suprimento.
             Suprimento_Compra suprimento = _dbContext.SuprimentosCompras
                 .Where((item) => item.Id == model.Id)
-                .FirstOrDefault() ?? throw new Exception("Compra de Suprimento informado não encontrado");
+                .FirstOrDefault() ?? throw new SGHSSBadRequestException("Compra de Suprimento informado não encontrado");
 
             // --== Atualizando entidade.
             suprimento.Atualizar(model);
@@ -372,18 +378,17 @@ namespace Loop.SGHSS.Services.Suprimentos
         /// </summary>
         /// <param name="model"></param>
         /// <returns></returns>
-        /// <exception cref="ArgumentException"></exception>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task ConsumirSuprimento(EstoqueModel model)
         {
             if (model.SuprimentoCompraId is null || model.QuantidadeSaida is null)
-                throw new ArgumentException("Informações inválidas para consumo de suprimento");
+                throw new SGHSSBadRequestException("Informações inválidas para consumo de suprimento");
 
             var compra = await _dbContext.SuprimentosCompras
                 .FirstOrDefaultAsync(x => x.Id == model.SuprimentoCompraId);
 
             if (compra == null)
-                throw new Exception("Compra de suprimento não encontrada");
+                throw new SGHSSBadRequestException("Compra de suprimento não encontrada");
 
             int saidaAtual = compra.QuantidadeSaida ?? 0;
             int saidaSolicitada = model.QuantidadeSaida.Value;
@@ -392,7 +397,7 @@ namespace Loop.SGHSS.Services.Suprimentos
             // --== Verifica se a nova saída ultrapassa a quantidade comprada
             if (saidaAtual + saidaSolicitada > quantidadeComprada)
             {
-                throw new InvalidOperationException(
+                throw new SGHSSBadRequestException(
                     $"A quantidade solicitada ({saidaSolicitada}) somada à já consumida ({saidaAtual}) " +
                     $"ultrapassa o total comprado ({quantidadeComprada})."
                 );
@@ -410,7 +415,6 @@ namespace Loop.SGHSS.Services.Suprimentos
             _dbContext.SuprimentosCompras.Update(compra);
             await _dbContext.SaveChangesAsync();
         }
-
 
         #endregion
     }

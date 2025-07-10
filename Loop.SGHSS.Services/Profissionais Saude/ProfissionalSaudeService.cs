@@ -2,6 +2,7 @@
 using Loop.SGHSS.Domain.Entities.Agenda_Entiity;
 using Loop.SGHSS.Domain.Entities.ProfessionalSaude_Entity;
 using Loop.SGHSS.Domain.Entities.Profissional_Saude_Entity;
+using Loop.SGHSS.Extensions.Exceptions;
 using Loop.SGHSS.Extensions.Paginacao;
 using Loop.SGHSS.Extensions.Seguranca;
 using Loop.SGHSS.Model._QueryFilter;
@@ -41,14 +42,14 @@ namespace Loop.SGHSS.Services.Profissionais_Saude
             bool jaExiste = await _dbContext.ProfissionaisSaude
                 .AnyAsync(x => x.CPF == model.CPF);
             if (jaExiste)
-                throw new Exception("Profissional já cadastrado no sistema.");
+                throw new SGHSSBadRequestException("Profissional já cadastrado no sistema.");
 
             // --== Gerar novo ID.
             model.Id = Guid.NewGuid();
 
             // --== Validar e gerar hash da senha
             if (string.IsNullOrWhiteSpace(model.PasswordHash))
-                throw new Exception("Senha é obrigatória para o profissional.");
+                throw new SGHSSBadRequestException("Senha é obrigatória para o profissional.");
 
             model.PasswordHash = PasswordHelper.GerarHashSenha(model.PasswordHash!);
 
@@ -66,7 +67,7 @@ namespace Loop.SGHSS.Services.Profissionais_Saude
         /// </summary>
         public async Task<PagedResult<ProfissionalSaudeViewModel>> ObterProfissionaisPaginados(ProfissionaisSaudeQueryFilter filter)
         {
-            var query = _dbContext.ProfissionaisSaude.AsQueryable();
+            var query = _dbContext.ProfissionaisSaude.Where(x => !x.SysIsDeleted).AsQueryable();
 
             if (filter.HasFilters)
             {
@@ -94,7 +95,7 @@ namespace Loop.SGHSS.Services.Profissionais_Saude
         public async Task<ProfissionalSaudeModel> BuscarProfissionalPorId(Guid id)
         {
             var entidade = await _dbContext.ProfissionaisSaude.FindAsync(id)
-                ?? throw new Exception("Profissional não encontrado.");
+                ?? throw new SGHSSBadRequestException("Profissional não encontrado.");
 
             return _mapper.Map<ProfissionalSaudeModel>(entidade);
         }
@@ -106,7 +107,7 @@ namespace Loop.SGHSS.Services.Profissionais_Saude
         {
             var entidade = _dbContext.ProfissionaisSaude
                 .FirstOrDefault(x => x.Id == model.Id)
-                ?? throw new Exception("Profissional não encontrado.");
+                ?? throw new SGHSSBadRequestException("Profissional não encontrado.");
 
             entidade.AtualizarGeral(model);
 
@@ -122,7 +123,7 @@ namespace Loop.SGHSS.Services.Profissionais_Saude
         {
             var entidade = _dbContext.ProfissionaisSaude
                 .FirstOrDefault(x => x.Id == model.Id)
-                ?? throw new Exception("Profissional não encontrado.");
+                ?? throw new SGHSSBadRequestException("Profissional não encontrado.");
 
             entidade.AtualizarEndereco(model);
 
@@ -138,13 +139,13 @@ namespace Loop.SGHSS.Services.Profissionais_Saude
         {
             var entidade = _dbContext.ProfissionaisSaude
                 .FirstOrDefault(x => x.Id == model.Id)
-                ?? throw new Exception("Profissional não encontrado.");
+                ?? throw new SGHSSBadRequestException("Profissional não encontrado.");
 
             if (string.IsNullOrWhiteSpace(model.PasswordHash) || model.PasswordHash.Length < 6)
-                throw new Exception("A senha deve ter pelo menos 6 caracteres.");
+                throw new SGHSSBadRequestException("A senha deve ter pelo menos 6 caracteres.");
 
             if (PasswordHelper.VerificarSenha(model.PasswordHash, entidade.PasswordHash))
-                throw new Exception("A nova senha não pode ser igual à senha anterior.");
+                throw new SGHSSBadRequestException("A nova senha não pode ser igual à senha anterior.");
 
             var novaSenhaHash = PasswordHelper.GerarHashSenha(model.PasswordHash);
 
@@ -156,24 +157,67 @@ namespace Loop.SGHSS.Services.Profissionais_Saude
 
             return model;
         }
+
+        /// <summary>
+        /// Responsável por marcar uma instituição como inativa do sistema.
+        /// </summary>
+        /// <returns></returns>
+        /// <exception cref="SGHSSBadRequestException"></exception>
+        public async Task Remover(Guid profissionalSaudeId)
+        {
+            // --== Buscando o profissional.
+            var profissional = await _dbContext.ProfissionaisSaude
+                .FirstOrDefaultAsync(f => f.Id == profissionalSaudeId);
+
+            if (profissional == null)
+                throw new SGHSSBadRequestException("Profissional de saúde informado não encontrado.");
+
+            // --== Se tiver, removendo agenda do profissional:
+            var agendas = _dbContext.ProfissionalSaudeAgenda
+                .Where(x => x.ProfissionalSaudeId == profissionalSaudeId);
+            foreach (var agenda in agendas) agenda.Delete();
+
+            // --== Se tiver, removendo relacionamento do profissional com suas especializações:
+            var profissionaisSaudeEspecializacao = _dbContext.ProfissionaisSaudeEspecializacao
+                .Where(x => x.ProfissionalSaudeId == profissionalSaudeId);
+            foreach (var item in profissionaisSaudeEspecializacao) item.Delete();
+
+            // --== Se tiver, removendo relacionamento do profissional com suas especializações de laboratórios:
+            var profissionaisSaudeServicosLaboratorio = _dbContext.ProfissionaisSaudeServicosLaboratorio
+                .Where(x => x.ProfissionalSaudeId == profissionalSaudeId);
+            foreach (var item in profissionaisSaudeServicosLaboratorio) item.Delete();
+
+            // --== Se tiver, removendo relacionamento do profissional com as instiruições associadas.
+            var profissionaisSaudeInstituicoes = _dbContext.ProfissionaisSaudeInstituicoes
+                .Where(x => x.ProfissionalSaudeId == profissionalSaudeId);
+            foreach (var item in profissionaisSaudeInstituicoes) item.Delete();
+
+            // --== Soft delete do profissional de saúde.
+            profissional.Delete();
+            _dbContext.ProfissionaisSaude.Update(profissional);
+
+            await _dbContext.SaveChangesAsync();
+        }
+
+
         #endregion
 
 
-        #region agenda
+        #region Agenda
 
         /// <summary>
         /// Cadastrar agenda de um profissional de saúde em uma instituição.
         /// </summary>
         /// <param name="model"></param>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task CadastrarAgendaProfissional(ProfissionalSaudeAgendaModel model)
         {
             // --== Verifica se o profissional existe
             var profissionalExiste = await _dbContext.ProfissionaisSaude
                 .AnyAsync(x => x.Id == model.ProfissionalSaudeId);
             if (!profissionalExiste)
-                throw new Exception("Profissional informado não encontrado.");
+                throw new SGHSSBadRequestException("Profissional informado não encontrado.");
 
             // --== Cadastra a agenda
             var agenda = new ProfissionalSaude_Agenda
@@ -254,7 +298,6 @@ namespace Loop.SGHSS.Services.Profissionais_Saude
             return resultado;
         }
 
-
         /// <summary>
         /// Obter todos os exames de um profissional de saúde com filtros e paginação.
         /// </summary>
@@ -313,12 +356,12 @@ namespace Loop.SGHSS.Services.Profissionais_Saude
         {
             ProfissionalSaude profissional = await _dbContext.ProfissionaisSaude
                 .FirstOrDefaultAsync(x => x.Id == profissionalId)
-                ?? throw new Exception("Profissional informado não encontrado.");
+                ?? throw new SGHSSBadRequestException("Profissional informado não encontrado.");
             var relacionamento = await _dbContext.ProfissionaisSaudeEspecializacao
                 .FirstOrDefaultAsync(x => x.EspecializacaoId == especializacaoId && x.ProfissionalSaudeId == profissionalId);
 
             if (relacionamento != null)
-                throw new Exception("Este profissional já está associado a esta especialização.");
+                throw new SGHSSBadRequestException("Este profissional já está associado a esta especialização.");
 
             var entidade = new ProfissionalSaude_Especializacao
             {
@@ -335,12 +378,12 @@ namespace Loop.SGHSS.Services.Profissionais_Saude
         /// Desvincular profissional da especialização.
         /// </summary>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task DesvincularEspecializacao(Guid profissionalId, Guid especializacaoId)
         {
             var entidade = await _dbContext.ProfissionaisSaudeEspecializacao
                 .FirstOrDefaultAsync(x => x.EspecializacaoId == especializacaoId && x.ProfissionalSaudeId == profissionalId)
-                ?? throw new Exception("Este profissional não está associado a esta especialidade");
+                ?? throw new SGHSSBadRequestException("Este profissional não está associado a esta especialidade");
 
             _dbContext.ProfissionaisSaudeEspecializacao.Remove(entidade);
             await _dbContext.SaveChangesAsync();
@@ -357,18 +400,18 @@ namespace Loop.SGHSS.Services.Profissionais_Saude
         /// <param name="instituicaoId"></param>
         /// <param name="especializacaoId"></param>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task VincularServicoLaboratorio(Guid profissionalId, Guid servicoLaboratorioId)
         {
 
             ProfissionalSaude profissional = await _dbContext.ProfissionaisSaude
                 .FirstOrDefaultAsync(x => x.Id == profissionalId)
-                ?? throw new Exception("Profissional informado não encontrado.");
+                ?? throw new SGHSSBadRequestException("Profissional informado não encontrado.");
             var relacionamento = await _dbContext.ProfissionaisSaudeServicosLaboratorio
                 .FirstOrDefaultAsync(x => x.ServicosLaboratorioId == servicoLaboratorioId && x.ProfissionalSaudeId == profissionalId);
 
             if (relacionamento != null)
-                throw new Exception("Este profissional já está associado a este serviço de laboratório.");
+                throw new SGHSSBadRequestException("Este profissional já está associado a este serviço de laboratório.");
 
             var entidade = new ProfissionalSaude_ServicoLaboratorio
             {
@@ -385,16 +428,17 @@ namespace Loop.SGHSS.Services.Profissionais_Saude
         /// Desvincular profissional do serviço de laboratório.
         /// </summary>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task DesvincularServicoLaboratorio(Guid profissionalId, Guid servicoLaboratorioId)
         {
             var entidade = await _dbContext.ProfissionaisSaudeServicosLaboratorio
               .FirstOrDefaultAsync(x => x.ServicosLaboratorioId == servicoLaboratorioId && x.ProfissionalSaudeId == profissionalId)
-              ?? throw new Exception("Este profissional não está associado a este serviço de laboratório.");
+              ?? throw new SGHSSBadRequestException("Este profissional não está associado a este serviço de laboratório.");
 
             _dbContext.ProfissionaisSaudeServicosLaboratorio.Remove(entidade);
             await _dbContext.SaveChangesAsync();
         }
+
         #endregion
     }
 }

@@ -1,4 +1,5 @@
-﻿using Loop.SGHSS.Model._Configuration;
+﻿using Loop.SGHSS.Extensions.Exceptions;
+using Loop.SGHSS.Model._Configuration;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -32,6 +33,12 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
             _httpClient.DefaultRequestHeaders.Add("Authorization", $"Bearer {_apiKey}");
         }
 
+        /// <summary>
+        /// Responsável por criar a sala de video chamada da teleconsulta, retornando o link autenticado com token.
+        /// </summary>
+        /// <param name="nomeSala"></param>
+        /// <returns></returns>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task<string> CriarSala(string nomeSala)
         {
             var request = new
@@ -54,13 +61,20 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
             if (!response.IsSuccessStatusCode)
             {
                 var error = await response.Content.ReadAsStringAsync();
-                throw new Exception($"Erro ao criar sala: {error}");
+                throw new SGHSSBadRequestException($"Erro ao criar sala: {error}");
             }
 
             var content = await response.Content.ReadFromJsonAsync<Dictionary<string, object>>();
-            return content["url"]?.ToString() ?? throw new Exception("URL da sala não encontrada.");
+            return content["url"]?.ToString() ?? throw new SGHSSBadRequestException("URL da sala não encontrada.");
         }
 
+        /// <summary>
+        /// Responsável por gerar o token de acesso para criar a sala de video chamada.
+        /// </summary>
+        /// <param name="nomeSala"></param>
+        /// <param name="nomeUsuario"></param>
+        /// <param name="role"></param>
+        /// <returns></returns>
         public string GerarTokenAcesso(string nomeSala, string nomeUsuario, string role = "user")
         {
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_apiKey));
@@ -82,6 +96,12 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
             return new JwtSecurityTokenHandler().WriteToken(token);
         }
 
+        /// <summary>
+        /// Responsável por fazer o encerramento da sala de video chamada.
+        /// </summary>
+        /// <param name="nomeSala"></param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
         public async Task EncerrarSala(string nomeSala)
         {
             var response = await _httpClient.DeleteAsync($"https://api.daily.co/v1/rooms/{nomeSala}/");
@@ -89,7 +109,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Consultas
             if (!response.IsSuccessStatusCode)
             {
                 var error = await response.Content.ReadAsStringAsync();
-                throw new Exception($"Erro ao encerrar sala: {error}");
+                throw new SGHSSBadRequestException($"Erro ao encerrar sala: {error}");
             }
         }
     }

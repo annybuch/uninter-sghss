@@ -204,7 +204,6 @@ namespace Loop.SGHSS.Data
             }
         }
 
-
         public override int SaveChanges()
         {
             AplicarInformacoes();

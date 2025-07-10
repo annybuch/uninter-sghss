@@ -1,4 +1,5 @@
 ﻿using Loop.SGHSS.Data;
+using Loop.SGHSS.Extensions.Exceptions;
 using Loop.SGHSS.Extensions.Paginacao;
 using Loop.SGHSS.Model._QueryFilter;
 using Loop.SGHSS.Model.ServicosPrestados;
@@ -30,7 +31,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Especializacoes
                 .AnyAsync(item => item.Titulo!.ToLower() == model.Titulo!.ToLower());
 
             if (jaExiste)
-                throw new Exception("Especialização informada já está cadastrada no sistema.");
+                throw new SGHSSBadRequestException("Especialização informada já está cadastrada no sistema.");
 
             // --== Gerando um novo Identificador.
             model.Id = Guid.NewGuid();
@@ -49,7 +50,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Especializacoes
         public async Task<PagedResult<EspecializacoesModel>> ObterEspecializacoesPaginadas(EspecializacoesQueryFilter filter)
         {
             // --== Iniciando a query.
-            var query = _dbContext.Especializacoes.AsQueryable();
+            var query = _dbContext.Especializacoes.Where(x => !x.SysIsDeleted).AsQueryable();
 
             if (filter.HasFilters)
             {
@@ -83,7 +84,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Especializacoes
         public async Task<EspecializacoesModel> BuscarEspecializacaoPorId(Guid id)
         {
             var entidade = await _dbContext.Especializacoes.FindAsync(id)
-                ?? throw new Exception("Especialização não encontrada no sistema.");
+                ?? throw new SGHSSBadRequestException("Especialização não encontrada no sistema.");
 
             return _mapper.Map<EspecializacoesModel>(entidade);
         }
@@ -97,7 +98,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Especializacoes
         {
             // --== Validando especialização.
             Domain.Entities.Servicos_Entity.Especializacoes especializacao = _dbContext.Especializacoes.Where((item) => item.Id == model.Id)
-                .FirstOrDefault() ?? throw new Exception("Especialização informada não encontrada");
+                .FirstOrDefault() ?? throw new SGHSSBadRequestException("Especialização informada não encontrada");
 
             // --== Atualizando entidade.
             especializacao.Atualizar(model);

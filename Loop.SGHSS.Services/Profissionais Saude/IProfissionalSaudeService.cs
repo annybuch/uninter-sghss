@@ -24,5 +24,6 @@ namespace Loop.SGHSS.Services.Profissionais_Saude
         Task VincularEspecializacao(Guid profissionalId, Guid especializacaoId);
         Task DesvincularServicoLaboratorio(Guid profissionalId, Guid servicoLaboratorioId);
         Task VincularServicoLaboratorio(Guid profissionalId, Guid servicoLaboratorioId);
+        Task Remover(Guid profissionalSaudeId);
     }
 }

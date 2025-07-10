@@ -1,5 +1,6 @@
 ﻿using Loop.SGHSS.Data;
 using Loop.SGHSS.Domain.Entities.Permissao_Entity;
+using Loop.SGHSS.Extensions.Exceptions;
 using Loop.SGHSS.Extensions.Paginacao;
 using Loop.SGHSS.Model._QueryFilter;
 using Loop.SGHSS.Model.Permissao;
@@ -20,6 +21,7 @@ namespace Loop.SGHSS.Services.Permissoes
         }
 
         #region CRUD Permissões
+
         /// <summary>
         /// Cadastrar uma nova permissão.
         /// </summary>
@@ -32,7 +34,7 @@ namespace Loop.SGHSS.Services.Permissoes
                 .AnyAsync(item => item.Codigo == model.Codigo);
 
             if (existe)
-                throw new Exception("Código da permissão informada já existe no sistema.");
+                throw new SGHSSBadRequestException("Código da permissão informada já existe no sistema.");
 
             // --== Gerando um novo Identificador.
             model.Id = Guid.NewGuid();
@@ -50,7 +52,7 @@ namespace Loop.SGHSS.Services.Permissoes
         /// <returns></returns>
         public async Task<PagedResult<PermissaoModel>> ObterPermissoesPaginadas(PermissaoQueryFilter filter)
         {
-            var query = _dbContext.Permissoes.AsQueryable();
+            var query = _dbContext.Permissoes.Where(x => !x.SysIsDeleted).AsQueryable();
 
             var permissoes = await query
                 .OrderBy(x => x.SysDInsert)
@@ -70,13 +72,15 @@ namespace Loop.SGHSS.Services.Permissoes
             var entidade = await _dbContext.Permissoes.FindAsync(id);
 
             if (entidade == null)
-                throw new Exception("Permissão não encontrada.");
+                throw new SGHSSBadRequestException("Permissão não encontrada.");
 
             return _mapper.Map<PermissaoModel>(entidade);
         }
+
         #endregion
 
         #region Dar permissões
+
         /// <summary>
         /// Vincular permissão a um profissional de saúde.
         /// </summary>
@@ -86,13 +90,13 @@ namespace Loop.SGHSS.Services.Permissoes
         {
             Permissao permissao = await _dbContext.Permissoes
                 .FirstOrDefaultAsync(x => x.Id == permissaoId)
-                ?? throw new Exception("Permissão informada não encontrada.");
+                ?? throw new SGHSSBadRequestException("Permissão informada não encontrada.");
 
             var relacionamento = await _dbContext.PermissoesProfissionaisSaude
                 .FirstOrDefaultAsync(x => x.PermissaoId == permissaoId && x.ProfissionalSaudeId == profissionalId);
 
             if (relacionamento != null)
-                throw new Exception("Este profissional já possui esta permissão.");
+                throw new SGHSSBadRequestException("Este profissional já possui esta permissão.");
 
             var entidade = new Permissao_ProfissionalSaude
             {
@@ -109,12 +113,12 @@ namespace Loop.SGHSS.Services.Permissoes
         /// Desvincular um profissional de saúde de uma permissão.
         /// </summary>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task DesvincularPermissaoProfissional(Guid permissaoId, Guid profissionalId)
         {
             var entidade = await _dbContext.PermissoesProfissionaisSaude
                 .FirstOrDefaultAsync(x => x.PermissaoId == permissaoId && x.ProfissionalSaudeId == profissionalId)
-                ?? throw new Exception("Este profissional não possui esta permissão.");
+                ?? throw new SGHSSBadRequestException("Este profissional não possui esta permissão.");
 
             _dbContext.PermissoesProfissionaisSaude.Remove(entidade);
             await _dbContext.SaveChangesAsync();
@@ -129,13 +133,13 @@ namespace Loop.SGHSS.Services.Permissoes
         {
             Permissao permissao = await _dbContext.Permissoes
                 .FirstOrDefaultAsync(x => x.Id == permissaoId)
-                ?? throw new Exception("Permissão informada não encontrada.");
+                ?? throw new SGHSSBadRequestException("Permissão informada não encontrada.");
 
             var relacionamento = await _dbContext.PermissoesFuncionarios
                 .FirstOrDefaultAsync(x => x.PermissaoId == permissaoId && x.FuncionarioId == funcionarioId);
 
             if (relacionamento != null)
-                throw new Exception("Este funcionário já possui esta permissão.");
+                throw new SGHSSBadRequestException("Este funcionário já possui esta permissão.");
 
             var entidade = new Permissao_Funcionario
             {
@@ -152,12 +156,12 @@ namespace Loop.SGHSS.Services.Permissoes
         /// Desvincular permissão de um funcionário de uma instituição
         /// </summary>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task DesvincularPermissaoFuncionario(Guid permissaoId, Guid funcionarioId)
         {
             var entidade = await _dbContext.PermissoesFuncionarios
                 .FirstOrDefaultAsync(x => x.PermissaoId == permissaoId && x.FuncionarioId == funcionarioId)
-                ?? throw new Exception("Este funcionário não possui esta permissão.");
+                ?? throw new SGHSSBadRequestException("Este funcionário não possui esta permissão.");
 
             _dbContext.PermissoesFuncionarios.Remove(entidade);
             await _dbContext.SaveChangesAsync();
@@ -167,18 +171,18 @@ namespace Loop.SGHSS.Services.Permissoes
         /// Vincular permissão a um paciente.
         /// </summary>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task VincularPermissaoPaciente(Guid permissaoId, Guid pacienteId)
         {
             Permissao permissao = await _dbContext.Permissoes
                 .FirstOrDefaultAsync(x => x.Id == permissaoId)
-                ?? throw new Exception("Permissão informada não encontrada.");
+                ?? throw new SGHSSBadRequestException("Permissão informada não encontrada.");
 
             var relacionamento = await _dbContext.PermissoesPaciente
                 .FirstOrDefaultAsync(x => x.PermissaoId == permissaoId && x.PacienteId == pacienteId);
 
             if (relacionamento != null)
-                throw new Exception("Este paciente já possui esta permissão.");
+                throw new SGHSSBadRequestException("Este paciente já possui esta permissão.");
 
             var entidade = new Permissao_Paciente
             {
@@ -195,12 +199,12 @@ namespace Loop.SGHSS.Services.Permissoes
         /// Desvincular permissão de um paciente.
         /// </summary>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task DesvincularPermissaoPaciente(Guid permissaoId, Guid pacienteId)
         {
             var entidade = await _dbContext.PermissoesPaciente
                 .FirstOrDefaultAsync(x => x.PermissaoId == permissaoId && x.PacienteId == pacienteId)
-                ?? throw new Exception("Este paciente não possui esta permissão.");
+                ?? throw new SGHSSBadRequestException("Este paciente não possui esta permissão.");
 
             _dbContext.PermissoesPaciente.Remove(entidade);
             await _dbContext.SaveChangesAsync();
@@ -215,13 +219,13 @@ namespace Loop.SGHSS.Services.Permissoes
         {
             Permissao permissao = await _dbContext.Permissoes
                 .FirstOrDefaultAsync(x => x.Id == permissaoId)
-                ?? throw new Exception("Permissão informada não encontrada.");
+                ?? throw new SGHSSBadRequestException("Permissão informada não encontrada.");
 
             var relacionamento = await _dbContext.PermissoesAdministrador
                 .FirstOrDefaultAsync(x => x.PermissaoId == permissaoId && x.AdministradorId == admId);
 
             if (relacionamento != null)
-                throw new Exception("Este administrador já possui esta permissão.");
+                throw new SGHSSBadRequestException("Este administrador já possui esta permissão.");
 
             var entidade = new Permissao_Administrador
             {
@@ -238,17 +242,19 @@ namespace Loop.SGHSS.Services.Permissoes
         /// Desvincular permissão de um paciente.
         /// </summary>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task DesvincularPermissaoAdm(Guid permissaoId, Guid admId)
         {
             var entidade = await _dbContext.PermissoesPaciente
                 .FirstOrDefaultAsync(x => x.PermissaoId == permissaoId && x.PacienteId == admId)
-                ?? throw new Exception("Este paciente não possui esta permissão.");
+                ?? throw new SGHSSBadRequestException("Este paciente não possui esta permissão.");
 
             _dbContext.PermissoesPaciente.Remove(entidade);
             await _dbContext.SaveChangesAsync();
         }
         #endregion
+
+        #region Permissões padrão
 
         /// <summary>
         /// Atribui as permissões padrão a um paciente recém-criado.
@@ -264,25 +270,35 @@ namespace Loop.SGHSS.Services.Permissoes
                 .Where(p => codigosPermissoes.Contains(p.Codigo!))
                 .ToListAsync();
 
+            // Buscar as permissões já atribuídas ao usuário (paciente)
+            var permissoesJaAtribuidas = await _dbContext.Set<TPermissaoEntity>()
+                .Where(p => EF.Property<Guid>(p, typeof(TPermissaoEntity) == typeof(Permissao_Paciente) ? "PacienteId" : "UserId") == userId)
+                .Select(p => EF.Property<Guid>(p, "PermissaoId"))
+                .ToListAsync();
+
             var permissoesAtribuir = new List<TPermissaoEntity>();
+
             foreach (var perm in permissoesExistentes)
             {
-                permissoesAtribuir.Add(createPermissionEntity(userId, perm.Id));
+                if (!permissoesJaAtribuidas.Contains(perm.Id))
+                {
+                    permissoesAtribuir.Add(createPermissionEntity(userId, perm.Id));
+                }
             }
 
-            if (typeof(TPermissaoEntity) == typeof(Permissao_Paciente))
-                await _dbContext.Set<Permissao_Paciente>().AddRangeAsync(permissoesAtribuir as IEnumerable<Permissao_Paciente>);
-            
-            else if (typeof(TPermissaoEntity) == typeof(Permissao_Funcionario))
-                await _dbContext.Set<Permissao_Funcionario>().AddRangeAsync(permissoesAtribuir as IEnumerable<Permissao_Funcionario>);
-            
-            else if (typeof(TPermissaoEntity) == typeof(Permissao_ProfissionalSaude))
-                await _dbContext.Set<Permissao_ProfissionalSaude>().AddRangeAsync(permissoesAtribuir as IEnumerable<Permissao_ProfissionalSaude>);
-            
-            else if (typeof(TPermissaoEntity) == typeof(Permissao_Administrador))
-                await _dbContext.Set<Permissao_Administrador>().AddRangeAsync(permissoesAtribuir as IEnumerable<Permissao_Administrador>);
-            
-            await _dbContext.SaveChangesAsync();
+            if (permissoesAtribuir.Any())
+            {
+                if (typeof(TPermissaoEntity) == typeof(Permissao_Paciente))
+                    await _dbContext.Set<Permissao_Paciente>().AddRangeAsync(permissoesAtribuir as IEnumerable<Permissao_Paciente>);
+                else if (typeof(TPermissaoEntity) == typeof(Permissao_Funcionario))
+                    await _dbContext.Set<Permissao_Funcionario>().AddRangeAsync(permissoesAtribuir as IEnumerable<Permissao_Funcionario>);
+                else if (typeof(TPermissaoEntity) == typeof(Permissao_ProfissionalSaude))
+                    await _dbContext.Set<Permissao_ProfissionalSaude>().AddRangeAsync(permissoesAtribuir as IEnumerable<Permissao_ProfissionalSaude>);
+                else if (typeof(TPermissaoEntity) == typeof(Permissao_Administrador))
+                    await _dbContext.Set<Permissao_Administrador>().AddRangeAsync(permissoesAtribuir as IEnumerable<Permissao_Administrador>);
+
+                await _dbContext.SaveChangesAsync();
+            }
         }
 
 
@@ -429,5 +445,7 @@ namespace Loop.SGHSS.Services.Permissoes
                 (userId, permId) => new Permissao_ProfissionalSaude { ProfissionalSaudeId = userId, PermissaoId = permId }
             );
         }
+
+        #endregion
     }
 }

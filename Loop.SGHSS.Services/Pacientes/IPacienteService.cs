@@ -17,6 +17,6 @@ namespace Loop.SGHSS.Services.Pacientes
         Task<PacientesModel> EditarPacienteGeral(PacientesModel model);
         Task<PacientesModel> BuscarPacientePorId(Guid id);
         Task<PagedResult<PacientesViewModel>> ObterPacientesPaginados(PacienteQueryFilter filter);
-        Task CadastrarPaciente(PacientesModel model);
+        Task<PacientesModel> CadastrarPaciente(PacientesModel model);
     }
 }

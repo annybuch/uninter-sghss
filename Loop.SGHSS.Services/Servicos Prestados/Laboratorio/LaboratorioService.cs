@@ -1,4 +1,5 @@
 ﻿using Loop.SGHSS.Data;
+using Loop.SGHSS.Extensions.Exceptions;
 using Loop.SGHSS.Extensions.Paginacao;
 using Loop.SGHSS.Model._QueryFilter;
 using Loop.SGHSS.Model.ServicosPrestados;
@@ -30,7 +31,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Laboratorio
                 .AnyAsync(item => item.Titulo!.ToLower() == model.Titulo!.ToLower());
 
             if (jaExiste)
-                throw new Exception("Serviço de laboratório informado já está cadastrado no sistema.");
+                throw new SGHSSBadRequestException("Serviço de laboratório informado já está cadastrado no sistema.");
 
             // --== Gerando um novo Identificador.
             model.Id = Guid.NewGuid();
@@ -83,7 +84,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Laboratorio
         public async Task<ServicosLaboratorioModel> BuscarServicoLaboratorioPorId(Guid id)
         {
             var entidade = await _dbContext.ServicosLaboratorios.FindAsync(id)
-                ?? throw new Exception("Laboratório não encontrado no sistema.");
+                ?? throw new SGHSSBadRequestException("Laboratório não encontrado no sistema.");
 
             return _mapper.Map<ServicosLaboratorioModel>(entidade);
         }
@@ -98,7 +99,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Laboratorio
             // --== Validando laboratório.
             Domain.Entities.Servicos_Entity.ServicosLaboratorio laboratorio = _dbContext.ServicosLaboratorios
                 .Where((item) => item.Id == model.Id)
-                .FirstOrDefault() ?? throw new Exception("Laboratório informado não encontrado");
+                .FirstOrDefault() ?? throw new SGHSSBadRequestException("Laboratório informado não encontrado");
 
             // --== Atualizando entidade.
             laboratorio.Atualizar(model);

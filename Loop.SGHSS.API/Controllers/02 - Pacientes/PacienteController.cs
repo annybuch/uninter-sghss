@@ -65,7 +65,6 @@ namespace Loop.SGHSS.API.Controllers._02___Pacientes
             return Ok(await _pacienteService.ObterConsultasPorPaciente(filter));
         }
 
-
         /// <summary>
         /// Responsável por retornar todos os exames de um paciente paginados e podendendo filtrar para ser consumido por calendário..
         /// </summary>

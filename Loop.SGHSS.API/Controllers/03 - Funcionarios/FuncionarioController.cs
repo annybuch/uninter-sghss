@@ -95,5 +95,15 @@ namespace Loop.SGHSS.API.Controllers._03___Funcionarios
         {
             return await Ok(_funcionarioService.EditarSenhaFuncionario(model));
         }
+
+        /// <summary>
+        /// Responsável por inativar (remover logicamente) um funcionário do sistema.
+        /// </summary>
+        [HttpDelete("remover/{funcionarioId}")]
+        [Authorize(Policy = "D03")] 
+        public async Task<IActionResult> RemoverFuncionario(Guid funcionarioId)
+        {
+            return await Ok (_funcionarioService.Remover(funcionarioId));
+        }
     }
 }

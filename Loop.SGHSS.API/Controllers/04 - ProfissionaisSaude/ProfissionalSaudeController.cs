@@ -164,5 +164,15 @@ namespace Loop.SGHSS.API.Controllers._04___ProfissionaisSaude
         {
             return await Created(_profissionalService.CadastrarAgendaProfissional(model));
         }
+
+        /// <summary>
+        /// Responsável por inativar (remover logicamente) um profissional da saúde do sistema.
+        /// </summary>
+        [HttpDelete("remover/{profissionalId}")]
+        [Authorize(Policy = "B06")]
+        public async Task<IActionResult> RemoverProfissionalSaude(Guid profissionalId)
+        {
+            return await Ok(_profissionalService.Remover(profissionalId));
+        }
     }
 }

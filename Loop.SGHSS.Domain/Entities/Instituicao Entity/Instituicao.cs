@@ -11,7 +11,6 @@ using Loop.SGHSS.Model._Enums.Instituicao;
 using Loop.SGHSS.Model.Endereco;
 using Loop.SGHSS.Model.Instituicoes;
 using Loop.SGHSS.Model.Leitos;
-using Microsoft.EntityFrameworkCore;
 
 namespace Loop.SGHSS.Domain.Entities.Instituicao_Entity
 {

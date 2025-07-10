@@ -3,6 +3,7 @@ using Loop.SGHSS.Domain.Entities.Agenda_Entiity;
 using Loop.SGHSS.Domain.Entities.Exame_Entity;
 using Loop.SGHSS.Domain.Entities.Instituicao_Entity;
 using Loop.SGHSS.Domain.Entities.ProfessionalSaude_Entity;
+using Loop.SGHSS.Extensions.Exceptions;
 using Loop.SGHSS.Extensions.Paginacao;
 using Loop.SGHSS.Model._Enums.Agenda;
 using Loop.SGHSS.Model._Enums.Consulta;
@@ -140,11 +141,11 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Exames
         public async Task<ExameModel> MarcarExame(ExameModel model)
         {
             // --== Validações ==--
-            if (model.PacienteId == null) throw new Exception("Paciente obrigatório.");
-            if (model.ProfissionalSaudeId == null) throw new Exception("Profissional obrigatório.");
-            if (model.InstituicaoId == null) throw new Exception("Instituição obrigatória.");
-            if (model.servicoLaboratorioId == null) throw new Exception("Servico Laboratório obrigatória.");
-            if (model.DataMarcada == default) throw new Exception("Data inválida.");
+            if (model.PacienteId == null) throw new SGHSSBadRequestException("Paciente obrigatório.");
+            if (model.ProfissionalSaudeId == null) throw new SGHSSBadRequestException("Profissional obrigatório.");
+            if (model.InstituicaoId == null) throw new SGHSSBadRequestException("Instituição obrigatória.");
+            if (model.servicoLaboratorioId == null) throw new SGHSSBadRequestException("Servico Laboratório obrigatória.");
+            if (model.DataMarcada == default) throw new SGHSSBadRequestException("Data inválida.");
 
             // --== Obtém o contexto de agendamento necessário para a validação da disponibilidade do horário.
             var contexto = await ObterContextoDeAgendamento(
@@ -154,7 +155,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Exames
             // --== Encontra o profissional no contexto.
             var profissional = contexto.Profissionais
                 .FirstOrDefault(p => p.Id == model.ProfissionalSaudeId)
-                ?? throw new Exception("Profissional não encontrado.");
+                ?? throw new SGHSSBadRequestException("Profissional não encontrado.");
 
             // --== Calcula os horários disponíveis para o profissional, instituição e data do exame.
             var horariosDisponiveis = ObterHorarios(
@@ -163,7 +164,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Exames
 
             // --== Verifica se o horário desejado para o exame está entre os horários disponíveis.
             if (!horariosDisponiveis.Contains(model.DataMarcada.TimeOfDay))
-                throw new Exception("O horário não está disponível.");
+                throw new SGHSSBadRequestException("O horário não está disponível.");
 
             // --== Criação e Persistência da Exame ==--
 
@@ -272,7 +273,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Exames
         {
             // --== Validar Instituição.
             var instituicao = await _dbContext.Instituicoes.FirstOrDefaultAsync(i => i.Id == instituicaoId)
-                ?? throw new Exception("Instituição não encontrada.");
+                ?? throw new SGHSSBadRequestException("Instituição não encontrada.");
 
             // --== Busca os profissionais de saúde que atendem na instituição e possuem a especialização.
             var profissionais = await _dbContext.ProfissionaisSaude
@@ -282,7 +283,7 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Exames
                 .ToListAsync();
 
             if (!profissionais.Any())
-                throw new Exception("Não há profissionais disponíveis para este serviço de laboratório na instituição selecionada.");
+                throw new SGHSSBadRequestException("Não há profissionais disponíveis para este serviço de laboratório na instituição selecionada.");
 
             var profissionalIds = profissionais.Select(p => p.Id).ToList();
 
@@ -323,10 +324,8 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Exames
         /// <returns></returns>
         public async Task<ExameModel?> BuscarExamePorId(Guid id)
         {
-            var entidade = await _dbContext.Exames.FindAsync(id);
-
-            if (entidade == null)
-                return null;
+            var entidade = await _dbContext.Exames.FindAsync(id)
+              ?? throw new SGHSSBadRequestException("Exame não encontrado no sistema");
 
             return _mapper.Map<ExameModel>(entidade);
         }
@@ -335,15 +334,15 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Exames
         /// Responsável por iniciar um exame.
         /// </summary>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task<ExameModel> IniciarExame(Guid exameId)
         {
             var exame = await _dbContext.Exames
                 .FirstOrDefaultAsync(c => c.Id == exameId)
-                ?? throw new Exception("Exame não encontrado.");
+                ?? throw new SGHSSBadRequestException("Exame não encontrado.");
 
             if (exame.StatusExame != StatusConsultaEnum.Pendente)
-                throw new Exception("Só é possível iniciar exames pendentes.");
+                throw new SGHSSBadRequestException("Só é possível iniciar exames pendentes.");
 
             exame.DataInicio = DateTime.Now;
             exame.StatusExame = StatusConsultaEnum.EmAtendimento;
@@ -359,16 +358,16 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Exames
         /// </summary>
         /// <param name="anotacoes"></param>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task<ExameModel> FinalizarExame(Guid exameId, string? anotacoes = null)
         {
 
             var exame = await _dbContext.Exames
                 .FirstOrDefaultAsync(c => c.Id == exameId)
-                ?? throw new Exception("Exame não encontrado.");
+                ?? throw new SGHSSBadRequestException("Exame não encontrado.");
 
             if (exame.StatusExame != StatusConsultaEnum.EmAtendimento)
-                throw new Exception("Só é possível finalizar exames que estão em andamento.");
+                throw new SGHSSBadRequestException("Só é possível finalizar exames que estão em andamento.");
 
             if (exame.StatusExame == StatusConsultaEnum.EmAtendimento)
             {
@@ -387,16 +386,16 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Exames
         /// Responsável por anexar um resultado ao exame.
         /// </summary>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task AnexarResultado(Guid exameId, byte[] resultado)
         {
             var exame = await _dbContext.Exames
                 .FirstOrDefaultAsync(c => c.Id == exameId)
-                ?? throw new Exception("Exame não encontrado.");
+                ?? throw new SGHSSBadRequestException("Exame não encontrado.");
 
             if (exame.StatusExame != StatusConsultaEnum.EmAtendimento &&
                 exame.StatusExame != StatusConsultaEnum.Finalizada)
-                throw new Exception("Só é possível anexar documentos em exames em andamento ou finalizados.");
+                throw new SGHSSBadRequestException("Só é possível anexar documentos em exames em andamento ou finalizados.");
 
             exame.Resultado = resultado;
 
@@ -408,16 +407,16 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Exames
         /// </summary>
         /// <param name="prescricao"></param>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task AnexarGuiaMedico(Guid exameId, byte[] guiaMedico)
         {
             var exame = await _dbContext.Exames
                 .FirstOrDefaultAsync(c => c.Id == exameId)
-                ?? throw new Exception("Exame não encontrada.");
+                ?? throw new SGHSSBadRequestException("Exame não encontrada.");
 
             if (exame.StatusExame != StatusConsultaEnum.EmAtendimento &&
                 exame.StatusExame != StatusConsultaEnum.Finalizada)
-                throw new Exception("Só é possível anexar documentos em exames em andamento ou finalizados.");
+                throw new SGHSSBadRequestException("Só é possível anexar documentos em exames em andamento ou finalizados.");
 
             exame.GuiaMedico = guiaMedico;
 
@@ -429,18 +428,18 @@ namespace Loop.SGHSS.Services.Servicos_Prestados.Exames
         /// </summary>
         /// <param name="exameId">ID do exame a ser cancelado.</param>
         /// <returns>Dados do exame cancelado.</returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task<ExameModel> CancelarExame(Guid exameId)
         {
             var exame = await _dbContext.Exames
                 .FirstOrDefaultAsync(c => c.Id == exameId)
-                ?? throw new Exception("Exame não encontrado.");
+                ?? throw new SGHSSBadRequestException("Exame não encontrado.");
 
             if (exame.StatusExame == StatusConsultaEnum.Cancelada)
-                throw new Exception("O exame já está cancelado.");
+                throw new SGHSSBadRequestException("O exame já está cancelado.");
 
             if (exame.StatusExame == StatusConsultaEnum.Finalizada)
-                throw new Exception("Não é possivel cancelar um exame já realizado.");
+                throw new SGHSSBadRequestException("Não é possivel cancelar um exame já realizado.");
 
             exame.StatusExame = StatusConsultaEnum.Cancelada;
 

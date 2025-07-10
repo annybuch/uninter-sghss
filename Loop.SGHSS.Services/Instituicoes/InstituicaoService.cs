@@ -2,6 +2,7 @@
 using Loop.SGHSS.Domain.Entities.Agenda_Entiity;
 using Loop.SGHSS.Domain.Entities.Instituicao_Entity;
 using Loop.SGHSS.Domain.Entities.Profissional_Saude_Entity;
+using Loop.SGHSS.Extensions.Exceptions;
 using Loop.SGHSS.Extensions.Paginacao;
 using Loop.SGHSS.Model._QueryFilter;
 using Loop.SGHSS.Model.Agenda;
@@ -38,7 +39,7 @@ namespace Loop.SGHSS.Services.Instituicoes
                 .AnyAsync(item => item.CNPJ == model.CNPJ);
 
             if (existe)
-                throw new Exception("Instituição informada já cadastrada no sistema.");
+                throw new SGHSSBadRequestException("Instituição informada já cadastrada no sistema.");
 
             // --== Gerando um novo Identificador.
             model.Id = Guid.NewGuid();
@@ -62,7 +63,7 @@ namespace Loop.SGHSS.Services.Instituicoes
             var instituicaoExiste = await _dbContext.Instituicoes
                 .AnyAsync(x => x.Id == model.InstituicaoId);
             if (!instituicaoExiste)
-                throw new Exception("Instituição informada não encontrada.");
+                throw new SGHSSBadRequestException("Instituição informada não encontrada.");
 
             // --== Cadastra a agenda
             var agenda = new Instituicao_Agenda
@@ -84,7 +85,7 @@ namespace Loop.SGHSS.Services.Instituicoes
         /// <returns></returns>
         public async Task<PagedResult<InstituicaoModel>> ObterInstituicoesPaginadas(InstituicaoQueryFilter filter)
         {
-            var query = _dbContext.Instituicoes.AsQueryable();
+            var query = _dbContext.Instituicoes.Where(x => !x.SysIsDeleted).AsQueryable();
 
             if (filter.HasFilters)
             {
@@ -110,10 +111,8 @@ namespace Loop.SGHSS.Services.Instituicoes
         /// <returns></returns>
         public async Task<InstituicaoModel?> BuscarInstituicaoPorId(Guid id)
         {
-            var entidade = await _dbContext.Instituicoes.FindAsync(id);
-
-            if (entidade == null)
-                return null;
+            var entidade = await _dbContext.Instituicoes.FindAsync(id)
+                ?? throw new SGHSSBadRequestException("Intituição não encontrado no sistema");
 
             return _mapper.Map<InstituicaoModel>(entidade);
         }
@@ -128,7 +127,7 @@ namespace Loop.SGHSS.Services.Instituicoes
         {
             // --== Obtendo instituição.
             Instituicao instituicao = _dbContext.Instituicoes.Where((item) => item.Id == model.Id)
-                .FirstOrDefault() ?? throw new Exception ("Instituição informada não encontrada");
+                .FirstOrDefault() ?? throw new SGHSSBadRequestException("Instituição informada não encontrada");
 
             // --== Atualizando entidade.
             instituicao.AtualizarGeral(model);
@@ -149,7 +148,7 @@ namespace Loop.SGHSS.Services.Instituicoes
         {
             // --== Obtendo instituição.
             Instituicao instituicao = _dbContext.Instituicoes.Where((item) => item.Id == model.Id)
-                .FirstOrDefault() ?? throw new Exception("Instituição informada não encontrada");
+                .FirstOrDefault() ?? throw new SGHSSBadRequestException("Instituição informada não encontrada");
 
             // --== Atualizando entidade.
             instituicao.AtualizarEndereco(model);
@@ -176,13 +175,13 @@ namespace Loop.SGHSS.Services.Instituicoes
         {
             Instituicao instituicao = await _dbContext.Instituicoes
                 .FirstOrDefaultAsync(x => x.Id == instituicaoId)
-                ?? throw new Exception("Instituição informada não encontrada.");
+                ?? throw new SGHSSBadRequestException("Instituição informada não encontrada.");
 
             var relacionamento = await _dbContext.ProfissionaisSaudeInstituicoes
                 .FirstOrDefaultAsync(x => x.InstituicaoId == instituicaoId && x.ProfissionalSaudeId == profissionalId);
 
             if (relacionamento != null)
-                throw new Exception("Este profissional já está associado a esta instituição.");
+                throw new SGHSSBadRequestException("Este profissional já está associado a esta instituição.");
 
             var entidade = new ProfissionalSaude_Instituicao
             {
@@ -202,13 +201,13 @@ namespace Loop.SGHSS.Services.Instituicoes
         /// <param name="instituicaoId"></param>
         /// <param name="profissionalId"></param>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task DesvincularProfissional(Guid instituicaoId, Guid profissionalId)
         {
 
             var entidade = await _dbContext.ProfissionaisSaudeInstituicoes
                 .FirstOrDefaultAsync(x => x.InstituicaoId == instituicaoId && x.ProfissionalSaudeId == profissionalId)
-                ?? throw new Exception("Este profissional não está associado a esta instituição");
+                ?? throw new SGHSSBadRequestException("Este profissional não está associado a esta instituição");
 
             _dbContext.ProfissionaisSaudeInstituicoes.Remove(entidade);
             await _dbContext.SaveChangesAsync();
@@ -224,18 +223,18 @@ namespace Loop.SGHSS.Services.Instituicoes
         /// <param name="instituicaoId"></param>
         /// <param name="especializacaoId"></param>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task VincularEspecializacao(Guid instituicaoId, Guid especializacaoId)
         {
             Instituicao instituicao = await _dbContext.Instituicoes
                 .FirstOrDefaultAsync(x => x.Id == instituicaoId)
-                ?? throw new Exception("Instituição informada não encontrada.");
+                ?? throw new SGHSSBadRequestException("Instituição informada não encontrada.");
 
             var relacionamento = await _dbContext.InstituicoesEspecializacoes
                 .FirstOrDefaultAsync(x => x.InstituicaoId == instituicaoId && x.EspecializacaoId == especializacaoId);
 
             if (relacionamento != null)
-                throw new Exception("Esta especialização já está associado a esta instituição.");
+                throw new SGHSSBadRequestException("Esta especialização já está associado a esta instituição.");
 
             var entidade = new Instituicao_Especializacao
             {
@@ -254,13 +253,13 @@ namespace Loop.SGHSS.Services.Instituicoes
         /// <param name="instituicaoId"></param>
         /// <param name="especializacaoId"></param>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task DesvincularEspecializacao(Guid instituicaoId, Guid especializacaoId)
         {
 
             var entidade = await _dbContext.InstituicoesEspecializacoes
                 .FirstOrDefaultAsync(x => x.InstituicaoId == instituicaoId && x.EspecializacaoId == especializacaoId)
-                ?? throw new Exception("Essa especialização não está associada a esta instituição");
+                ?? throw new SGHSSBadRequestException("Essa especialização não está associada a esta instituição");
 
             _dbContext.InstituicoesEspecializacoes.Remove(entidade);
             await _dbContext.SaveChangesAsync();
@@ -270,24 +269,25 @@ namespace Loop.SGHSS.Services.Instituicoes
 
 
         #region Relacionamento Serviço laboratório
+
         /// <summary>
         /// Vincular serviço de laboratório à Instituição
         /// </summary>
         /// <param name="instituicaoId"></param>
         /// <param name="especializacaoId"></param>
         /// <returns></returns>
-        /// <exception cref="Exception"></exception>
+        /// <exception cref="SGHSSBadRequestException"></exception>
         public async Task VincularServicoLaboratorio(Guid instituicaoId, Guid servicoLaboratorioId)
         {
             Instituicao instituicao = await _dbContext.Instituicoes
                 .FirstOrDefaultAsync(x => x.Id == instituicaoId)
-                ?? throw new Exception("Instituição informada não encontrada.");
+                ?? throw new SGHSSBadRequestException("Instituição informada não encontrada.");
 
             var relacionamento = await _dbContext.InstituicoesServicosLaboratorio
                 .FirstOrDefaultAsync(x => x.InstituicaoId == instituicaoId && x.ServicosLaboratorioId == servicoLaboratorioId);
 
             if (relacionamento != null)
-                throw new Exception("Esta especialização de laboratório já está associado a esta instituição.");
+                throw new SGHSSBadRequestException("Esta especialização de laboratório já está associado a esta instituição.");
 
             var entidade = new Instituicao_ServicosLaboratorio
             {
@@ -310,11 +310,12 @@ namespace Loop.SGHSS.Services.Instituicoes
 
             var entidade = await _dbContext.InstituicoesServicosLaboratorio
                 .FirstOrDefaultAsync(x => x.InstituicaoId == instituicaoId && x.ServicosLaboratorioId == servicoLaboratorioId)
-                ?? throw new Exception("Essa especialização não está associada a esta instituição");
+                ?? throw new SGHSSBadRequestException("Essa especialização não está associada a esta instituição");
 
             _dbContext.InstituicoesServicosLaboratorio.Remove(entidade);
             await _dbContext.SaveChangesAsync();
         }
+
         #endregion
 
     }
